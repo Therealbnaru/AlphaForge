@@ -9,6 +9,11 @@ def _number(value: object) -> float | None:
     if value is None or value == "":
         return None
 
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
 
 def _trade_key(trade: dict) -> str:
     trade_id = trade.get("trade_id", trade.get("id"))
@@ -17,11 +22,6 @@ def _trade_key(trade: dict) -> str:
 
     trade_text = json.dumps(trade, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(trade_text.encode("utf-8")).hexdigest()
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 class ResearchDatabase:
