@@ -44,6 +44,9 @@ def build_market_features(markets: list[dict]) -> list[dict]:
 
         feature = {
             "ticker": market.get("ticker"),
+            "event_ticker": market.get("event_ticker"),
+            "series_ticker": market.get("series_ticker"),
+            "category": market.get("category", "unknown"),
             "title": market.get("title"),
             "bid": bid,
             "ask": ask,
