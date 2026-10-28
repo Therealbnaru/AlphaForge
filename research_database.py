@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,6 +8,15 @@ from pathlib import Path
 def _number(value: object) -> float | None:
     if value is None or value == "":
         return None
+
+
+def _trade_key(trade: dict) -> str:
+    trade_id = trade.get("trade_id", trade.get("id"))
+    if isinstance(trade_id, str) and trade_id != "":
+        return trade_id
+
+    trade_text = json.dumps(trade, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(trade_text.encode("utf-8")).hexdigest()
 
     try:
         return float(value)
@@ -45,6 +55,7 @@ class ResearchDatabase:
             );
 
             CREATE TABLE IF NOT EXISTS trades (
+                trade_key TEXT NOT NULL,
                 observed_at TEXT NOT NULL,
                 ticker TEXT,
                 trade_time TEXT,
@@ -60,6 +71,17 @@ class ResearchDatabase:
                 PRIMARY KEY (observed_at, ticker)
             );
             """
+        )
+        trade_columns = self.connection.execute("PRAGMA table_info(trades)").fetchall()
+        column_names = {column[1] for column in trade_columns}
+        if "trade_key" not in column_names:
+            self.connection.execute("ALTER TABLE trades ADD COLUMN trade_key TEXT")
+            self.connection.execute(
+                "UPDATE trades SET trade_key = lower(hex(randomblob(16))) WHERE trade_key IS NULL"
+            )
+
+        self.connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS unique_trade_key ON trades (trade_key)"
         )
         self.connection.commit()
 
@@ -111,6 +133,7 @@ class ResearchDatabase:
         records = []
         for trade in trades:
             records.append((
+                _trade_key(trade),
                 observed_at,
                 trade.get("ticker"),
                 trade.get("created_time", trade.get("timestamp")),
@@ -120,7 +143,7 @@ class ResearchDatabase:
             ))
 
         self.connection.executemany(
-            "INSERT INTO trades (observed_at, ticker, trade_time, price, quantity, payload) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO trades (trade_key, observed_at, ticker, trade_time, price, quantity, payload) VALUES (?, ?, ?, ?, ?, ?, ?)",
             records,
         )
         self.connection.commit()
